@@ -1,3 +1,32 @@
 {
-  "cards": []
+  "cards": [
+    {
+      "id": "ATZ-YSG-1",
+      "group": "ATEEZ",
+      "member": "Yeosang",
+      "tier": 1,
+      "era": "Golden Hour"
+    },
+    {
+      "id": "ATZ-YSG-2",
+      "group": "ATEEZ",
+      "member": "Yeosang",
+      "tier": 2,
+      "era": "Golden Hour"
+    },
+    {
+      "id": "ATZ-YSG-3",
+      "group": "ATEEZ",
+      "member": "Yeosang",
+      "tier": 3,
+      "era": "Golden Hour"
+    },
+    {
+      "id": "ATZ-YSG-4",
+      "group": "ATEEZ",
+      "member": "Yeosang",
+      "tier": 4,
+      "era": "Golden Hour"
+    }
+  ]
 }
