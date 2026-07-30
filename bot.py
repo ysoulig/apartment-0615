@@ -1,3 +1,4 @@
+import os
 import discord
 from discord.ext import commands
 
@@ -13,7 +14,7 @@ bot = commands.Bot(
 
 @bot.event
 async def on_ready():
-    print(f"apartment-0615 is online!")
+    print("apartment-0615 is online!")
     print(f"Logged in as {bot.user}")
 
 
@@ -23,4 +24,4 @@ async def ping(ctx):
 
 
 # Start the bot
-bot.run("YOUR_BOT_TOKEN_HERE")
+bot.run(os.environ["DISCORD_TOKEN"])
