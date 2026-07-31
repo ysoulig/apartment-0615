@@ -1,6 +1,7 @@
 import os
 import json
 import random
+from collections import Counter
 
 import discord
 from discord import app_commands
@@ -48,6 +49,13 @@ def save_users():
             indent=2,
             ensure_ascii=False
         )
+
+
+# -------------------------
+# Active drops
+# -------------------------
+
+active_drops = {}
 
 
 # -------------------------
@@ -144,12 +152,107 @@ async def collection(interaction: discord.Interaction):
         )
         return
 
+    card_counts = Counter(collection)
+
     message = "📚 **Your Collection**\n\n"
 
-    for card_id in collection:
-        message += f"🃏 {card_id}\n"
+    for card_id, amount in card_counts.items():
+        message += f"🃏 **{card_id}** ×{amount}\n"
+
+    message += f"\n**Total cards:** {len(collection)}"
 
     await interaction.response.send_message(message)
+
+
+# -------------------------
+# Drop button
+# -------------------------
+
+class CardDropView(discord.ui.View):
+
+    def __init__(self, dropped_cards, dropper_id):
+        super().__init__(timeout=300)
+
+        self.dropped_cards = dropped_cards
+        self.dropper_id = dropper_id
+        self.claimed_cards = set()
+        self.first_pick_done = False
+
+        for number in range(3):
+            button = discord.ui.Button(
+                label=f"Card {number + 1}",
+                style=discord.ButtonStyle.primary,
+                custom_id=f"card_drop_{number}"
+            )
+
+            button.callback = self.make_callback(number)
+            self.add_item(button)
+
+    def make_callback(self, number):
+
+        async def callback(interaction: discord.Interaction):
+
+            user_id = interaction.user.id
+            card = self.dropped_cards[number]
+            card_id = card["id"]
+
+            # Card already claimed
+            if number in self.claimed_cards:
+                await interaction.response.send_message(
+                    "❌ That card has already been claimed!",
+                    ephemeral=True
+                )
+                return
+
+            # Dropper gets first pick
+            if not self.first_pick_done:
+
+                if user_id != self.dropper_id:
+                    await interaction.response.send_message(
+                        "⏳ The person who dropped these cards gets first pick!",
+                        ephemeral=True
+                    )
+                    return
+
+                self.first_pick_done = True
+
+            # Make user account if needed
+            user_key = str(user_id)
+
+            if user_key not in users:
+                users[user_key] = {
+                    "cards": []
+                }
+
+            # Give card
+            users[user_key]["cards"].append(card_id)
+            save_users()
+
+            self.claimed_cards.add(number)
+
+            # Disable the claimed button
+            for child in self.children:
+                if isinstance(child, discord.ui.Button):
+                    if child.custom_id == f"card_drop_{number}":
+                        child.disabled = True
+                        child.label = "CLAIMED"
+                        child.style = discord.ButtonStyle.secondary
+
+            await interaction.response.edit_message(
+                content=(
+                    f"🃏 **CARD DROP**\n\n"
+                    f"🎉 {interaction.user.mention} claimed "
+                    f"**{card_id}**!\n\n"
+                    f"Remaining cards can now be claimed by anyone."
+                ),
+                view=self
+            )
+
+            # End when all cards are claimed
+            if len(self.claimed_cards) == 3:
+                self.stop()
+
+        return callback
 
 
 # -------------------------
@@ -158,7 +261,7 @@ async def collection(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="drop",
-    description="Drop three random cards!"
+    description="Drop three cards for everyone to claim!"
 )
 async def drop(interaction: discord.Interaction):
 
@@ -170,34 +273,30 @@ async def drop(interaction: discord.Interaction):
 
     dropped_cards = random.sample(cards, 3)
 
-    chosen_card = random.choice(dropped_cards)
+    view = CardDropView(
+        dropped_cards,
+        interaction.user.id
+    )
 
-    user_id = str(interaction.user.id)
-
-    if user_id not in users:
-        users[user_id] = {
-            "cards": []
-        }
-
-    users[user_id]["cards"].append(chosen_card["id"])
-
-    save_users()
-
-    message = "🃏 **CARD DROP!**\n\n"
+    message = (
+        "🃏 **CARD DROP!**\n\n"
+        f"👑 Dropped by {interaction.user.mention}\n\n"
+        "The person who dropped the cards gets **first pick**!\n"
+        "After that, anyone can claim the remaining cards.\n\n"
+    )
 
     for number, card in enumerate(dropped_cards, start=1):
         message += (
-            f"**{number}. {card['id']}**\n"
-            f"👤 {card['group']} — {card['member']}\n"
-            f"💿 {card['era']}\n"
-            f"⭐ Tier {card['tier']}\n\n"
+            f"**Card {number}**\n"
+            f"`{card['id']}` • "
+            f"{card['group']} — {card['member']}\n"
+            f"💿 {card['era']} • ⭐ Tier {card['tier']}\n\n"
         )
 
-    message += (
-        f"🎉 You received **{chosen_card['id']}**!"
+    await interaction.response.send_message(
+        message,
+        view=view
     )
-
-    await interaction.response.send_message(message)
 
 
 # -------------------------
