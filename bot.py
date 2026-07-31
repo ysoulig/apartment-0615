@@ -37,6 +37,20 @@ users = user_data["users"]
 
 
 # -------------------------
+# Save user database
+# -------------------------
+
+def save_users():
+    with open("users.json", "w", encoding="utf-8") as file:
+        json.dump(
+            {"users": users},
+            file,
+            indent=2,
+            ensure_ascii=False
+        )
+
+
+# -------------------------
 # Create bot
 # -------------------------
 
@@ -119,6 +133,7 @@ async def collection(interaction: discord.Interaction):
         users[user_id] = {
             "cards": []
         }
+        save_users()
 
     collection = users[user_id]["cards"]
 
@@ -155,7 +170,20 @@ async def drop(interaction: discord.Interaction):
 
     dropped_cards = random.sample(cards, 3)
 
-    message = "🃏 **CARD DROP**\n\n"
+    chosen_card = random.choice(dropped_cards)
+
+    user_id = str(interaction.user.id)
+
+    if user_id not in users:
+        users[user_id] = {
+            "cards": []
+        }
+
+    users[user_id]["cards"].append(chosen_card["id"])
+
+    save_users()
+
+    message = "🃏 **CARD DROP!**\n\n"
 
     for number, card in enumerate(dropped_cards, start=1):
         message += (
@@ -164,6 +192,10 @@ async def drop(interaction: discord.Interaction):
             f"💿 {card['era']}\n"
             f"⭐ Tier {card['tier']}\n\n"
         )
+
+    message += (
+        f"🎉 You received **{chosen_card['id']}**!"
+    )
 
     await interaction.response.send_message(message)
 
