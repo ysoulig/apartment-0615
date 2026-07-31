@@ -1,10 +1,19 @@
 import os
 import json
 import random
+import time
 from collections import Counter
 
 import discord
 from discord import app_commands
+
+
+# -------------------------
+# Settings
+# -------------------------
+
+DROP_COOLDOWN = 10 * 60
+CLAIM_COOLDOWN = 10 * 60
 
 
 # -------------------------
@@ -52,10 +61,26 @@ def save_users():
 
 
 # -------------------------
-# Active drops
+# Time helpers
 # -------------------------
 
-active_drops = {}
+def get_remaining_time(last_used, cooldown):
+    remaining = cooldown - (time.time() - last_used)
+
+    if remaining <= 0:
+        return 0
+
+    return int(remaining)
+
+
+def format_time(seconds):
+    minutes = seconds // 60
+    seconds = seconds % 60
+
+    if minutes > 0:
+        return f"{minutes}m {seconds}s"
+
+    return f"{seconds}s"
 
 
 # -------------------------
@@ -87,6 +112,25 @@ async def on_ready():
     print(f"Loaded {len(cards)} cards.")
     print(f"Loaded {len(groups)} groups.")
     print(f"Loaded {len(users)} users.")
+
+
+# -------------------------
+# User setup
+# -------------------------
+
+def get_user(user_id):
+    user_id = str(user_id)
+
+    if user_id not in users:
+        users[user_id] = {
+            "cards": [],
+            "last_drop": 0,
+            "last_claim": 0
+        }
+
+        save_users()
+
+    return users[user_id]
 
 
 # -------------------------
@@ -135,15 +179,9 @@ async def cards_command(interaction: discord.Interaction):
 )
 async def collection(interaction: discord.Interaction):
 
-    user_id = str(interaction.user.id)
+    user = get_user(interaction.user.id)
 
-    if user_id not in users:
-        users[user_id] = {
-            "cards": []
-        }
-        save_users()
-
-    collection = users[user_id]["cards"]
+    collection = user["cards"]
 
     if len(collection) == 0:
         await interaction.response.send_message(
@@ -165,7 +203,7 @@ async def collection(interaction: discord.Interaction):
 
 
 # -------------------------
-# Drop button
+# Card drop buttons
 # -------------------------
 
 class CardDropView(discord.ui.View):
@@ -214,25 +252,43 @@ class CardDropView(discord.ui.View):
                     )
                     return
 
-                self.first_pick_done = True
+            # After first pick, check claim cooldown
+            else:
 
-            # Make user account if needed
-            user_key = str(user_id)
+                user = get_user(user_id)
 
-            if user_key not in users:
-                users[user_key] = {
-                    "cards": []
-                }
+                remaining = get_remaining_time(
+                    user["last_claim"],
+                    CLAIM_COOLDOWN
+                )
+
+                if remaining > 0:
+                    await interaction.response.send_message(
+                        f"⏳ You're on claim cooldown!\n"
+                        f"Try again in **{format_time(remaining)}**.",
+                        ephemeral=True
+                    )
+                    return
+
+            # Make sure user exists
+            user = get_user(user_id)
 
             # Give card
-            users[user_key]["cards"].append(card_id)
-            save_users()
+            user["cards"].append(card_id)
 
+            # First pick is not a claim cooldown
+            if self.first_pick_done:
+                user["last_claim"] = time.time()
+
+            self.first_pick_done = True
             self.claimed_cards.add(number)
 
-            # Disable the claimed button
+            save_users()
+
+            # Disable claimed button
             for child in self.children:
                 if isinstance(child, discord.ui.Button):
+
                     if child.custom_id == f"card_drop_{number}":
                         child.disabled = True
                         child.label = "CLAIMED"
@@ -243,12 +299,11 @@ class CardDropView(discord.ui.View):
                     f"🃏 **CARD DROP**\n\n"
                     f"🎉 {interaction.user.mention} claimed "
                     f"**{card_id}**!\n\n"
-                    f"Remaining cards can now be claimed by anyone."
+                    f"Remaining cards can be claimed by other users."
                 ),
                 view=self
             )
 
-            # End when all cards are claimed
             if len(self.claimed_cards) == 3:
                 self.stop()
 
@@ -265,6 +320,21 @@ class CardDropView(discord.ui.View):
 )
 async def drop(interaction: discord.Interaction):
 
+    user = get_user(interaction.user.id)
+
+    remaining = get_remaining_time(
+        user["last_drop"],
+        DROP_COOLDOWN
+    )
+
+    if remaining > 0:
+        await interaction.response.send_message(
+            f"⏳ You can't drop yet!\n"
+            f"Try again in **{format_time(remaining)}**.",
+            ephemeral=True
+        )
+        return
+
     if len(cards) < 3:
         await interaction.response.send_message(
             "❌ There aren't enough cards for a drop yet!"
@@ -272,6 +342,10 @@ async def drop(interaction: discord.Interaction):
         return
 
     dropped_cards = random.sample(cards, 3)
+
+    user["last_drop"] = time.time()
+
+    save_users()
 
     view = CardDropView(
         dropped_cards,
@@ -281,7 +355,7 @@ async def drop(interaction: discord.Interaction):
     message = (
         "🃏 **CARD DROP!**\n\n"
         f"👑 Dropped by {interaction.user.mention}\n\n"
-        "The person who dropped the cards gets **first pick**!\n"
+        "The dropper gets **first pick**!\n"
         "After that, anyone can claim the remaining cards.\n\n"
     )
 
