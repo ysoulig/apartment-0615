@@ -27,6 +27,16 @@ groups = group_data["groups"]
 
 
 # -------------------------
+# Load user database
+# -------------------------
+
+with open("users.json", "r", encoding="utf-8") as file:
+    user_data = json.load(file)
+
+users = user_data["users"]
+
+
+# -------------------------
 # Create bot
 # -------------------------
 
@@ -54,6 +64,7 @@ async def on_ready():
     print(f"Logged in as {bot.user}")
     print(f"Loaded {len(cards)} cards.")
     print(f"Loaded {len(groups)} groups.")
+    print(f"Loaded {len(users)} users.")
 
 
 # -------------------------
@@ -88,6 +99,40 @@ async def cards_command(interaction: discord.Interaction):
             f"{card['group']} • {card['member']} • "
             f"{card['era']} • Tier {card['tier']}\n"
         )
+
+    await interaction.response.send_message(message)
+
+
+# -------------------------
+# /collection
+# -------------------------
+
+@bot.tree.command(
+    name="collection",
+    description="View your card collection."
+)
+async def collection(interaction: discord.Interaction):
+
+    user_id = str(interaction.user.id)
+
+    if user_id not in users:
+        users[user_id] = {
+            "cards": []
+        }
+
+    collection = users[user_id]["cards"]
+
+    if len(collection) == 0:
+        await interaction.response.send_message(
+            "📚 Your collection is empty!\n"
+            "Use `/drop` to start collecting cards."
+        )
+        return
+
+    message = "📚 **Your Collection**\n\n"
+
+    for card_id in collection:
+        message += f"🃏 {card_id}\n"
 
     await interaction.response.send_message(message)
 
