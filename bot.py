@@ -76,12 +76,20 @@ async def ping(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="cards",
-    description="See how many cards are in the database."
+    description="See the cards currently in the database."
 )
 async def cards_command(interaction: discord.Interaction):
-    await interaction.response.send_message(
-        f"🃏 The database currently contains **{len(cards)} cards**."
-    )
+
+    message = "🃏 **Cards currently in apartment-0615:**\n\n"
+
+    for card in cards:
+        message += (
+            f"**{card['id']}** — "
+            f"{card['group']} • {card['member']} • "
+            f"{card['era']} • Tier {card['tier']}\n"
+        )
+
+    await interaction.response.send_message(message)
 
 
 # -------------------------
@@ -96,19 +104,20 @@ async def drop(interaction: discord.Interaction):
 
     if len(cards) < 3:
         await interaction.response.send_message(
-            "❌ There aren't enough cards in the database yet!"
+            "❌ There aren't enough cards for a drop yet!"
         )
         return
 
     dropped_cards = random.sample(cards, 3)
 
-    message = "🃏 **A CARD DROP!**\n\n"
+    message = "🃏 **CARD DROP**\n\n"
 
-    for card in dropped_cards:
+    for number, card in enumerate(dropped_cards, start=1):
         message += (
-            f"**{card['id']}**\n"
-            f"{card['group']} — {card['member']}\n"
-            f"Tier {card['tier']} • {card['era']}\n\n"
+            f"**{number}. {card['id']}**\n"
+            f"👤 {card['group']} — {card['member']}\n"
+            f"💿 {card['era']}\n"
+            f"⭐ Tier {card['tier']}\n\n"
         )
 
     await interaction.response.send_message(message)
